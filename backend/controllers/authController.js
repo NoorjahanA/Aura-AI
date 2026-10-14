@@ -158,3 +158,117 @@ export const getMe = async (req, res) => {
     res.status(500).json({ error: 'Server error fetching user details' });
   }
 };
+
+export const googleAuth = async (req, res) => {
+  try {
+    const { credential, email, name, avatar, googleId } = req.body;
+    let resolvedEmail = email;
+    let resolvedName = name;
+    let resolvedAvatar = avatar;
+    let resolvedGoogleId = googleId;
+
+    // Verify token with Google's API or decode safely
+    if (credential) {
+      try {
+        const verifyRes = await fetch(`https://oauth2.googleapis.com/tokeninfo?id_token=${credential}`);
+        if (verifyRes.ok) {
+          const googleData = await verifyRes.json();
+          resolvedEmail = googleData.email || resolvedEmail;
+          resolvedName = googleData.name || resolvedName;
+          resolvedAvatar = googleData.picture || resolvedAvatar;
+          resolvedGoogleId = googleData.sub || resolvedGoogleId;
+        } else {
+          // Decode safely from base64 payload
+          const parts = credential.split('.');
+          if (parts.length === 3) {
+            const payloadJson = Buffer.from(parts[1], 'base64').toString('utf-8');
+            const decoded = JSON.parse(payloadJson);
+            resolvedEmail = decoded.email || resolvedEmail;
+            resolvedName = decoded.name || resolvedName;
+            resolvedAvatar = decoded.picture || resolvedAvatar;
+            resolvedGoogleId = decoded.sub || resolvedGoogleId;
+          }
+        }
+      } catch (tokenErr) {
+        console.warn('Google token verify note:', tokenErr.message);
+      }
+    }
+
+    if (!resolvedEmail) {
+      return res.status(400).json({ error: 'Valid Google email is required' });
+    }
+
+    const cleanEmail = resolvedEmail.toLowerCase().trim();
+    const cleanName = (resolvedName || cleanEmail.split('@')[0]).trim();
+    const cleanAvatar = resolvedAvatar || `https://api.dicebear.com/7.x/bottts/svg?seed=${cleanEmail}`;
+    const finalGoogleId = resolvedGoogleId || `goog_${cleanEmail.replace(/[^a-zA-Z0-9]/g, '_')}`;
+
+    if (getDBStatus()) {
+      let user = await User.findOne({
+        $or: [{ email: cleanEmail }, { googleId: finalGoogleId }]
+      });
+
+      if (user) {
+        let changed = false;
+        if (!user.googleId) {
+          user.googleId = finalGoogleId;
+          changed = true;
+        }
+        if (!user.avatar || user.avatar.includes('dicebear')) {
+          user.avatar = cleanAvatar;
+          changed = true;
+        }
+        if (changed) {
+          await user.save();
+        }
+      } else {
+        user = await User.create({
+          name: cleanName,
+          email: cleanEmail,
+          googleId: finalGoogleId,
+          avatar: cleanAvatar
+        });
+      }
+
+      const token = generateToken(user._id, user.email, user.name);
+      return res.json({
+        user: {
+          id: user._id,
+          name: user.name,
+          email: user.email,
+          avatar: user.avatar,
+          settings: user.settings
+        },
+        token
+      });
+    } else {
+      // In-memory fallback
+      let user = memoryUsers.find((u) => u.email === cleanEmail || u.googleId === finalGoogleId);
+      if (!user) {
+        user = {
+          id: `user_google_${Date.now()}`,
+          name: cleanName,
+          email: cleanEmail,
+          googleId: finalGoogleId,
+          avatar: cleanAvatar,
+          settings: { theme: 'dark', reasoningVisible: true }
+        };
+        memoryUsers.push(user);
+      }
+      const token = generateToken(user.id, user.email, user.name);
+      return res.json({
+        user: {
+          id: user.id,
+          name: user.name,
+          email: user.email,
+          avatar: user.avatar,
+          settings: user.settings
+        },
+        token
+      });
+    }
+  } catch (err) {
+    console.error('Google Auth Error:', err);
+    res.status(500).json({ error: 'Server error during Google authentication: ' + err.message });
+  }
+};

@@ -1,3 +1,4 @@
+import mongoose from 'mongoose';
 import { Conversation } from '../models/Conversation.js';
 import { getDBStatus } from '../config/db.js';
 
@@ -33,24 +34,46 @@ let memoryConversations = [
 
 export const getConversations = async (req, res) => {
   try {
-    const userId = req.user?.id || null;
+    const rawUserId = req.user?.id || null;
 
     if (getDBStatus()) {
-      const query = userId ? { userId } : { userId: null };
+      let query;
+      if (rawUserId) {
+        const objectId = mongoose.Types.ObjectId.isValid(rawUserId)
+          ? new mongoose.Types.ObjectId(rawUserId)
+          : null;
+        query = objectId
+          ? { $or: [{ userId: objectId }, { userId: rawUserId }] }
+          : { userId: rawUserId };
+      } else {
+        query = { userId: null };
+      }
+
       const convs = await Conversation.find(query)
-        .select('_id title model updatedAt createdAt')
+        .select('_id title model updatedAt createdAt messages')
         .sort({ updatedAt: -1 });
-      return res.json(convs);
+
+      const mapped = convs.map((c) => ({
+        _id: c._id,
+        id: c._id,
+        title: c.title,
+        model: c.model,
+        updatedAt: c.updatedAt,
+        createdAt: c.createdAt,
+        messageCount: c.messages?.length || 0
+      }));
+      return res.json(mapped);
     } else {
       const filtered = memoryConversations
-        .filter((c) => (userId ? c.userId === userId : true))
+        .filter((c) => (rawUserId ? String(c.userId) === String(rawUserId) : !c.userId))
         .map((c) => ({
           _id: c._id || c.id,
           id: c._id || c.id,
           title: c.title,
           model: c.model,
           updatedAt: c.updatedAt,
-          createdAt: c.createdAt || c.updatedAt
+          createdAt: c.createdAt || c.updatedAt,
+          messageCount: c.messages?.length || 0
         }))
         .sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt));
       return res.json(filtered);
@@ -66,11 +89,14 @@ export const getConversationById = async (req, res) => {
     const { id } = req.params;
 
     if (getDBStatus()) {
+      if (!mongoose.Types.ObjectId.isValid(id)) {
+        return res.status(404).json({ error: 'Conversation not found' });
+      }
       const conv = await Conversation.findById(id);
       if (!conv) return res.status(404).json({ error: 'Conversation not found' });
       return res.json(conv);
     } else {
-      const conv = memoryConversations.find((c) => (c._id === id || c.id === id));
+      const conv = memoryConversations.find((c) => c._id === id || c.id === id);
       if (!conv) return res.status(404).json({ error: 'Conversation not found' });
       return res.json(conv);
     }
@@ -81,7 +107,11 @@ export const getConversationById = async (req, res) => {
 
 export const createConversation = async (req, res) => {
   try {
-    const userId = req.user?.id || null;
+    const rawUserId = req.user?.id || null;
+    const userId =
+      rawUserId && mongoose.Types.ObjectId.isValid(rawUserId)
+        ? new mongoose.Types.ObjectId(rawUserId)
+        : rawUserId;
     const { title, model } = req.body;
 
     const chosenTitle = title || 'New Neumorphic Chat';
@@ -99,7 +129,7 @@ export const createConversation = async (req, res) => {
       const newConv = {
         _id: `conv_${Date.now()}`,
         id: `conv_${Date.now()}`,
-        userId,
+        userId: rawUserId,
         title: chosenTitle,
         model: chosenModel,
         messages: [],
@@ -110,6 +140,7 @@ export const createConversation = async (req, res) => {
       return res.status(201).json(newConv);
     }
   } catch (err) {
+    console.error('Failed to create conversation:', err);
     res.status(500).json({ error: 'Failed to initialize conversation' });
   }
 };
@@ -119,7 +150,9 @@ export const deleteConversation = async (req, res) => {
     const { id } = req.params;
 
     if (getDBStatus()) {
-      await Conversation.findByIdAndDelete(id);
+      if (mongoose.Types.ObjectId.isValid(id)) {
+        await Conversation.findByIdAndDelete(id);
+      }
       return res.json({ success: true, message: 'Conversation deleted' });
     } else {
       memoryConversations = memoryConversations.filter((c) => c._id !== id && c.id !== id);
@@ -127,6 +160,42 @@ export const deleteConversation = async (req, res) => {
     }
   } catch (err) {
     res.status(500).json({ error: 'Failed to delete conversation' });
+  }
+};
+
+export const claimConversations = async (req, res) => {
+  try {
+    const rawUserId = req.user?.id;
+    if (!rawUserId) {
+      return res.status(401).json({ error: 'Authentication required' });
+    }
+    const { conversationIds } = req.body;
+    if (!conversationIds || !Array.isArray(conversationIds) || conversationIds.length === 0) {
+      return res.status(400).json({ error: 'conversationIds array required' });
+    }
+
+    if (getDBStatus()) {
+      const objectId = mongoose.Types.ObjectId.isValid(rawUserId)
+        ? new mongoose.Types.ObjectId(rawUserId)
+        : rawUserId;
+      const validIds = conversationIds.filter((id) => mongoose.Types.ObjectId.isValid(id));
+      if (validIds.length > 0) {
+        await Conversation.updateMany(
+          { _id: { $in: validIds }, userId: null },
+          { $set: { userId: objectId } }
+        );
+      }
+    } else {
+      memoryConversations.forEach((c) => {
+        if (conversationIds.includes(c._id || c.id) && !c.userId) {
+          c.userId = rawUserId;
+        }
+      });
+    }
+    return res.json({ success: true, message: 'Conversations claimed successfully' });
+  } catch (err) {
+    console.error('Error claiming conversations:', err);
+    res.status(500).json({ error: 'Failed to claim conversations' });
   }
 };
 
@@ -254,68 +323,140 @@ export const streamChat = async (req, res) => {
     res.end();
 
     // Persist messages to conversation asynchronously
-    if (conversationId) {
-      try {
-        const userLatestMessage = messages[messages.length - 1];
-        const assistantMessageObj = {
-          role: 'assistant',
-          content: assistantContent,
-          reasoning: assistantReasoning,
-          reasoning_details: reasoningDetails.length > 0 ? reasoningDetails : (assistantReasoning ? [{ type: 'reasoning.text', text: assistantReasoning, index: 0 }] : []),
-          createdAt: new Date()
-        };
+    const rawUserId = req.user?.id || null;
+    const userId =
+      rawUserId && mongoose.Types.ObjectId.isValid(rawUserId)
+        ? new mongoose.Types.ObjectId(rawUserId)
+        : rawUserId;
 
-        if (getDBStatus()) {
-          const conv = await Conversation.findById(conversationId);
-          if (conv) {
-            // Check if user message is already stored
-            const alreadyHasUser = conv.messages.some(
-              (m) => m.role === 'user' && m.content === userLatestMessage.content
-            );
-            if (!alreadyHasUser) {
-              conv.messages.push({
+    try {
+      const userLatestMessage = messages[messages.length - 1];
+      const assistantMessageObj = {
+        role: 'assistant',
+        content: assistantContent,
+        reasoning: assistantReasoning,
+        reasoning_details:
+          reasoningDetails.length > 0
+            ? reasoningDetails
+            : assistantReasoning
+            ? [{ type: 'reasoning.text', text: assistantReasoning, index: 0 }]
+            : [],
+        createdAt: new Date()
+      };
+
+      if (getDBStatus()) {
+        let conv = null;
+        if (conversationId && mongoose.Types.ObjectId.isValid(conversationId)) {
+          conv = await Conversation.findById(conversationId);
+        }
+
+        if (conv) {
+          // If conversation belongs to no user but request has a user, claim it
+          if (!conv.userId && userId) {
+            conv.userId = userId;
+          }
+          const alreadyHasUser = conv.messages.some(
+            (m) => m.role === 'user' && m.content === userLatestMessage.content
+          );
+          if (!alreadyHasUser) {
+            conv.messages.push({
+              role: userLatestMessage.role,
+              content: userLatestMessage.content,
+              createdAt: new Date()
+            });
+          }
+          conv.messages.push(assistantMessageObj);
+
+          if (conv.messages.length <= 3 && (!conv.title || conv.title === 'New Neumorphic Chat')) {
+            conv.title =
+              userLatestMessage.content.slice(0, 36) +
+              (userLatestMessage.content.length > 36 ? '...' : '');
+          }
+          conv.updatedAt = new Date();
+          await conv.save();
+        } else {
+          // Auto-create new conversation document in MongoDB so user history is never lost
+          const newTitle = userLatestMessage?.content
+            ? userLatestMessage.content.slice(0, 36) +
+              (userLatestMessage.content.length > 36 ? '...' : '')
+            : 'New Neumorphic Chat';
+          await Conversation.create({
+            userId,
+            title: newTitle,
+            model,
+            messages: [
+              {
                 role: userLatestMessage.role,
                 content: userLatestMessage.content,
                 createdAt: new Date()
-              });
-            }
-            conv.messages.push(assistantMessageObj);
-
-            // Auto-update conversation title if it's new
-            if (conv.messages.length <= 3 && (!conv.title || conv.title === 'New Neumorphic Chat')) {
-              conv.title = userLatestMessage.content.slice(0, 36) + (userLatestMessage.content.length > 36 ? '...' : '');
-            }
-            conv.updatedAt = new Date();
-            await conv.save();
+              },
+              assistantMessageObj
+            ]
+          });
+        }
+      } else {
+        // In-memory fallback
+        let conv = null;
+        if (conversationId) {
+          conv = memoryConversations.find(
+            (c) => c._id === conversationId || c.id === conversationId
+          );
+        }
+        if (conv) {
+          if (!conv.userId && rawUserId) {
+            conv.userId = rawUserId;
           }
+          const alreadyHasUser = conv.messages.some(
+            (m) => m.role === 'user' && m.content === userLatestMessage.content
+          );
+          if (!alreadyHasUser) {
+            conv.messages.push({
+              role: userLatestMessage.role,
+              content: userLatestMessage.content,
+              createdAt: new Date().toISOString()
+            });
+          }
+          conv.messages.push({
+            _id: `m_${Date.now()}`,
+            ...assistantMessageObj,
+            createdAt: new Date().toISOString()
+          });
+
+          if (conv.messages.length <= 3 && (!conv.title || conv.title === 'New Neumorphic Chat')) {
+            conv.title =
+              userLatestMessage.content.slice(0, 36) +
+              (userLatestMessage.content.length > 36 ? '...' : '');
+          }
+          conv.updatedAt = new Date().toISOString();
         } else {
-          const conv = memoryConversations.find((c) => (c._id === conversationId || c.id === conversationId));
-          if (conv) {
-            const alreadyHasUser = conv.messages.some(
-              (m) => m.role === 'user' && m.content === userLatestMessage.content
-            );
-            if (!alreadyHasUser) {
-              conv.messages.push({
+          const newConv = {
+            _id: `conv_${Date.now()}`,
+            id: `conv_${Date.now()}`,
+            userId: rawUserId,
+            title:
+              userLatestMessage.content.slice(0, 36) +
+              (userLatestMessage.content.length > 36 ? '...' : ''),
+            model,
+            messages: [
+              {
                 role: userLatestMessage.role,
                 content: userLatestMessage.content,
                 createdAt: new Date().toISOString()
-              });
-            }
-            conv.messages.push({
-              _id: `m_${Date.now()}`,
-              ...assistantMessageObj,
-              createdAt: new Date().toISOString()
-            });
-
-            if (conv.messages.length <= 3 && (!conv.title || conv.title === 'New Neumorphic Chat')) {
-              conv.title = userLatestMessage.content.slice(0, 36) + (userLatestMessage.content.length > 36 ? '...' : '');
-            }
-            conv.updatedAt = new Date().toISOString();
-          }
+              },
+              {
+                _id: `m_${Date.now()}`,
+                ...assistantMessageObj,
+                createdAt: new Date().toISOString()
+              }
+            ],
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString()
+          };
+          memoryConversations.unshift(newConv);
         }
-      } catch (saveErr) {
-        console.error('Error auto-saving conversation messages:', saveErr);
       }
+    } catch (saveErr) {
+      console.error('Error auto-saving conversation messages:', saveErr);
     }
   } catch (err) {
     console.error('Error during chat stream:', err);

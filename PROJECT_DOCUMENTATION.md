@@ -279,7 +279,12 @@ We use the **NVIDIA Nemotron-3 Ultra 550B** reasoning model hosted on OpenRouter
 const userSchema = new mongoose.Schema({
   name: { type: String, required: true },
   email: { type: String, required: true, unique: true },
-  password: { type: String, required: true, minlength: 6 },
+  password: { 
+    type: String, 
+    required: function() { return !this.googleId; }, 
+    minlength: 6 
+  },
+  googleId: { type: String, default: null, sparse: true },
   avatar: { type: String, default: '' },
   settings: {
     theme: { type: String, enum: ['light', 'dark'], default: 'dark' },
@@ -287,8 +292,9 @@ const userSchema = new mongoose.Schema({
   }
 }, { timestamps: true });
 ```
-- **Bcrypt Pre-save Hook**: Hashes passwords with 10 salt rounds before saving.
-- **Password Comparison**: Uses `user.comparePassword(candidatePassword)` on login.
+- **Bcrypt Pre-save Hook**: Hashes passwords with 10 salt rounds before saving (skipped for OAuth users).
+- **Password Comparison**: Uses `user.comparePassword(candidatePassword)` on email login.
+- **Google OAuth Authentication**: `/api/auth/google` handles Google Identity Services tokens and direct Google profile authentication, generating a signed JWT and linking conversations.
 
 ### Conversation Schema (`Conversation.js`)
 ```javascript

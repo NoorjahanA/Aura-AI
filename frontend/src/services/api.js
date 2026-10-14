@@ -102,5 +102,21 @@ export const api = {
     } catch {
       return { success: true };
     }
+  },
+
+  async claimConversations(conversationIds, token) {
+    if (!token || !conversationIds || conversationIds.length === 0) return;
+    try {
+      await fetch(`${API_BASE}/conversations/claim`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({ conversationIds })
+      });
+    } catch (err) {
+      console.warn('Failed to claim conversations:', err);
+    }
   }
 };

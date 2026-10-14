@@ -18,8 +18,15 @@ const userSchema = new mongoose.Schema(
     },
     password: {
       type: String,
-      required: true,
+      required: function () {
+        return !this.googleId;
+      },
       minlength: 6
+    },
+    googleId: {
+      type: String,
+      default: null,
+      sparse: true
     },
     avatar: {
       type: String,
@@ -42,7 +49,7 @@ const userSchema = new mongoose.Schema(
 
 // Hash password automatically before saving if modified
 userSchema.pre('save', async function (next) {
-  if (!this.isModified('password')) {
+  if (!this.password || !this.isModified('password')) {
     return next();
   }
   try {
@@ -56,6 +63,7 @@ userSchema.pre('save', async function (next) {
 
 // Instance method to verify password
 userSchema.methods.comparePassword = async function (candidatePassword) {
+  if (!this.password) return false;
   return bcrypt.compare(candidatePassword, this.password);
 };
 

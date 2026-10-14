@@ -6,7 +6,7 @@ import { useAuth } from './AuthContext.jsx';
 const ChatContext = createContext();
 
 export const ChatProvider = ({ children }) => {
-  const { token } = useAuth();
+  const { user, token } = useAuth();
   const [conversations, setConversations] = useState([]);
   const [activeId, setActiveId] = useState(null);
   const [messages, setMessages] = useState([]);
@@ -16,25 +16,53 @@ export const ChatProvider = ({ children }) => {
   const [reasoningVisible, setReasoningVisible] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const abortControllerRef = useRef(null);
+  const userWasLoggedInRef = useRef(Boolean(token));
 
-  // Initialize conversations
+  // Initialize or switch conversations when user or token changes
   useEffect(() => {
     loadConversations();
-  }, [token]);
+  }, [token, user?.id]);
 
   const loadConversations = async () => {
     try {
+      // If user just logged in and had an active guest conversation, claim it for this user in MongoDB!
+      if (token && activeId && !userWasLoggedInRef.current) {
+        try {
+          await api.claimConversations([activeId], token);
+        } catch (cErr) {
+          console.warn('Could not claim previous session chat:', cErr);
+        }
+      }
+      userWasLoggedInRef.current = Boolean(token);
+
       const list = await api.getConversations(token);
       setConversations(list);
-      if (list.length > 0 && !activeId) {
-        selectConversation(list[0]._id || list[0].id);
+
+      if (list && list.length > 0) {
+        // If current activeId belongs to this user's list, keep it; otherwise select latest
+        const currentInList = list.find((c) => (c._id || c.id) === activeId);
+        if (currentInList) {
+          selectConversation(activeId);
+        } else {
+          selectConversation(list[0]._id || list[0].id);
+        }
+      } else {
+        // User has 0 previous conversations: clean slate
+        setActiveId(null);
+        setMessages([]);
+        setStreamingContent('');
+        setStreamingReasoning('');
       }
     } catch (err) {
       console.error('Error loading conversations:', err);
+      setConversations([]);
+      setActiveId(null);
+      setMessages([]);
     }
   };
 
   const selectConversation = async (id) => {
+    if (!id) return;
     setActiveId(id);
     setStreamingContent('');
     setStreamingReasoning('');
@@ -47,7 +75,7 @@ export const ChatProvider = ({ children }) => {
         setMessages([]);
       }
     } catch {
-      // Find in existing list
+      // Find in existing state
       const local = conversations.find((c) => (c._id === id || c.id === id));
       setMessages(local?.messages || []);
     }
@@ -58,10 +86,9 @@ export const ChatProvider = ({ children }) => {
       stopStreaming();
     }
     const newConv = await api.createConversation({ title: 'New Neumorphic Chat' }, token);
-    const updated = [newConv, ...conversations];
-    setConversations(updated);
-    localStorage.setItem('neu_conversations', JSON.stringify(updated));
-    setActiveId(newConv._id || newConv.id);
+    const newId = newConv._id || newConv.id;
+    setConversations((prev) => [newConv, ...prev.filter((c) => (c._id || c.id) !== newId)]);
+    setActiveId(newId);
     setMessages([]);
     setStreamingContent('');
     setStreamingReasoning('');
@@ -72,13 +99,13 @@ export const ChatProvider = ({ children }) => {
     await api.deleteConversation(id, token);
     const updated = conversations.filter((c) => c._id !== id && c.id !== id);
     setConversations(updated);
-    localStorage.setItem('neu_conversations', JSON.stringify(updated));
 
     if (activeId === id) {
       if (updated.length > 0) {
         selectConversation(updated[0]._id || updated[0].id);
       } else {
-        createNewChat();
+        setActiveId(null);
+        setMessages([]);
       }
     }
   };
@@ -95,6 +122,21 @@ export const ChatProvider = ({ children }) => {
     if (!userPrompt || !userPrompt.trim() || isStreaming) return;
 
     const trimmed = userPrompt.trim();
+    let currentConvId = activeId;
+
+    // If no active conversation exists, create one right now in MongoDB/backend
+    if (!currentConvId) {
+      try {
+        const initialTitle = trimmed.slice(0, 36) + (trimmed.length > 36 ? '...' : '');
+        const created = await api.createConversation({ title: initialTitle }, token);
+        currentConvId = created._id || created.id;
+        setActiveId(currentConvId);
+        setConversations((prev) => [created, ...prev.filter((c) => (c._id || c.id) !== currentConvId)]);
+      } catch (cErr) {
+        console.error('Failed to pre-create conversation:', cErr);
+      }
+    }
+
     const userMessage = {
       _id: `u_${Date.now()}`,
       role: 'user',
@@ -116,7 +158,7 @@ export const ChatProvider = ({ children }) => {
 
     await streamChatCompletion({
       messages: nextMessages,
-      conversationId: activeId,
+      conversationId: currentConvId,
       token,
       abortSignal: abortCtrl.signal,
       onDelta: (chunk, full) => {
@@ -145,25 +187,35 @@ export const ChatProvider = ({ children }) => {
         setStreamingReasoning('');
         abortControllerRef.current = null;
 
-        // Update conversation title if needed
+        // Ensure conversation is in sidebar list and title updated
         setConversations((prev) => {
-          const mapped = prev.map((c) => {
-            if (c._id === activeId || c.id === activeId) {
-              const updatedTitle =
-                c.title === 'New Neumorphic Chat' || !c.title
-                  ? trimmed.slice(0, 36) + (trimmed.length > 36 ? '...' : '')
-                  : c.title;
+          const updatedTitle = trimmed.slice(0, 36) + (trimmed.length > 36 ? '...' : '');
+          const exists = prev.some((c) => (c._id || c.id) === currentConvId);
+
+          if (!exists && currentConvId) {
+            return [
+              {
+                _id: currentConvId,
+                id: currentConvId,
+                title: updatedTitle,
+                updatedAt: new Date().toISOString(),
+                messages: finalMessages
+              },
+              ...prev
+            ];
+          }
+
+          return prev.map((c) => {
+            if ((c._id || c.id) === currentConvId) {
               return {
                 ...c,
-                title: updatedTitle,
+                title: c.title === 'New Neumorphic Chat' || !c.title ? updatedTitle : c.title,
                 updatedAt: new Date().toISOString(),
                 messages: finalMessages
               };
             }
             return c;
           });
-          localStorage.setItem('neu_conversations', JSON.stringify(mapped));
-          return mapped;
         });
       },
       onError: (err) => {
@@ -183,7 +235,7 @@ export const ChatProvider = ({ children }) => {
     });
   };
 
-  const activeConversation = conversations.find((c) => c._id === activeId || c.id === activeId);
+  const activeConversation = conversations.find((c) => (c._id || c.id) === activeId);
 
   return (
     <ChatContext.Provider
