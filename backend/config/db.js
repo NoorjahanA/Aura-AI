@@ -1,4 +1,8 @@
 import mongoose from 'mongoose';
+import dns from 'dns';
+
+// Force Google Public DNS for SRV lookups (some networks block MongoDB Atlas SRV records)
+dns.setServers(['8.8.8.8', '8.8.4.4']);
 
 let isConnected = false;
 

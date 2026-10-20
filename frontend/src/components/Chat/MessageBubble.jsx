@@ -163,14 +163,7 @@ export const MessageBubble = ({ message, isStreaming = false }) => {
             width: '100%'
           }}
         >
-          {/* Reasoning Display for Assistant Messages */}
-          {!isUser && (message.reasoning || (message.reasoning_details && message.reasoning_details.length > 0) || (isStreaming && message.isGeneratingReasoning)) && (
-            <ReasoningBox
-              reasoning={message.reasoning}
-              reasoningDetails={message.reasoning_details}
-              isStreaming={isStreaming && message.isGeneratingReasoning}
-            />
-          )}
+          {/* Reasoning Display - Hidden (reasoning data is still collected but not shown in chat) */}
 
           {/* Message Text Content */}
           <div>{renderContent(message.content)}</div>
