@@ -2,7 +2,8 @@ import React, { createContext, useContext, useState, useEffect } from 'react';
 
 const AuthContext = createContext();
 
-const API_BASE = 'http://localhost:5000/api/auth';
+const SERVER_URL = import.meta.env.VITE_API_URL || 'https://aura-ai-c4df.onrender.com';
+const API_BASE = `${SERVER_URL}/api/auth`;
 
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(() => {

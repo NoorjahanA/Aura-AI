@@ -1,4 +1,5 @@
-const API_BASE = 'http://localhost:5000/api';
+const SERVER_URL = import.meta.env.VITE_API_URL || 'https://aura-ai-c4df.onrender.com';
+const API_BASE = `${SERVER_URL}/api`;
 
 const DEFAULT_CONVERSATION = {
   _id: 'conv_default',
