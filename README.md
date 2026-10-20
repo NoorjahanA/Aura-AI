@@ -31,7 +31,6 @@
 - [System Architecture](#-system-architecture)
 - [Tech Stack](#-tech-stack)
 - [Project Directory Structure](#-project-directory-structure)
-- [Environment Configuration](#-environment-configuration)
 - [API Reference](#-api-reference)
 - [Getting Started Locally](#-getting-started-locally)
 - [Cloud Deployment](#-cloud-deployment)
@@ -220,27 +219,6 @@ AI-Chatbot/
 ├── PROJECT_DOCUMENTATION.md                # Comprehensive architectural manual
 └── README.md                               # Project documentation
 ```
-
----
-
-## ⚙️ Environment Configuration
-
-### Backend (`backend/.env`)
-
-| Variable | Description | Example / Default |
-|---|---|---|
-| `PORT` | Listening server port | `5000` (Local) / `10000` (Render) |
-| `MONGODB_URI` | MongoDB Atlas SRV connection string | `mongodb+srv://<user>:<pwd>@cluster.mongodb.net/ai_chatbot` |
-| `JWT_SECRET` | Secret key for signing JWT tokens | `your_secure_jwt_secret_key` |
-| `OPENROUTER_API_KEY`| API key from OpenRouter | `sk-or-v1-...` |
-| `OPENROUTER_MODEL`  | Reasoning LLM identifier | `nvidia/nemotron-3-ultra-550b-a55b:free` |
-| `CLIENT_URL` | Allowed CORS origin | `*` or `https://aura-ai.noorjahana995.workers.dev` |
-
-### Frontend (`frontend/.env` - Optional)
-
-| Variable | Description | Default |
-|---|---|---|
-| `VITE_API_URL` | Base URL of the backend API | `https://aura-ai-c4df.onrender.com` |
 
 ---
 
