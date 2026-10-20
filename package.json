@@ -3,6 +3,9 @@
   "version": "1.0.0",
   "description": "Minimalistic Neumorphic AI Chatbot - MERN Stack",
   "scripts": {
+    "start": "npm --prefix backend start",
+    "build": "npm --prefix backend install",
+    "postinstall": "npm --prefix backend install",
     "frontend": "npm --prefix frontend run dev",
     "backend": "npm --prefix backend run dev",
     "client": "npm --prefix frontend run dev",
