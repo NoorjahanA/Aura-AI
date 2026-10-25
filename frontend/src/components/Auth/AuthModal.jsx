@@ -1,6 +1,7 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { X, Lock, Mail, User, Sparkles, LogIn, UserPlus, CheckCircle, ArrowRight } from 'lucide-react';
+import React, { useState } from 'react';
+import { X, Lock, Mail, User, Sparkles, LogIn, UserPlus } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext.jsx';
+import { auth, googleProvider, signInWithPopup } from '../../config/firebase';
 
 const GoogleIcon = () => (
   <svg width="20" height="20" viewBox="0 0 24 24" fill="none" style={{ flexShrink: 0 }}>
@@ -40,53 +41,18 @@ export const AuthModal = () => {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [showGoogleDialog, setShowGoogleDialog] = useState(false);
-  const [googleEmailInput, setGoogleEmailInput] = useState('');
-  const [googleNameInput, setGoogleNameInput] = useState('');
-  const googleBtnRef = useRef(null);
 
   const resetFields = () => {
     setName('');
     setEmail('');
     setPassword('');
     setError('');
-    setShowGoogleDialog(false);
   };
 
   const handleClose = () => {
     resetFields();
     setIsAuthModalOpen(false);
   };
-
-  // Initialize official Google Identity Services if client ID is configured
-  useEffect(() => {
-    if (!isAuthModalOpen) return;
-    const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
-
-    if (window.google?.accounts?.id && clientId) {
-      try {
-        window.google.accounts.id.initialize({
-          client_id: clientId,
-          callback: async (response) => {
-            if (response.credential) {
-              await loginWithGoogle({ credential: response.credential });
-            }
-          }
-        });
-
-        if (googleBtnRef.current) {
-          window.google.accounts.id.renderButton(googleBtnRef.current, {
-            theme: 'outline',
-            size: 'large',
-            width: '100%',
-            text: 'continue_with'
-          });
-        }
-      } catch (err) {
-        console.warn('Google GSI Init:', err);
-      }
-    }
-  }, [isAuthModalOpen]);
 
   if (!isAuthModalOpen) return null;
 
@@ -105,29 +71,23 @@ export const AuthModal = () => {
   };
 
   const handleGoogleClick = async () => {
-    const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
-    if (window.google?.accounts?.id && clientId) {
-      window.google.accounts.id.prompt();
-    } else {
-      // If VITE_GOOGLE_CLIENT_ID is not configured, open interactive Google Account modal
-      setShowGoogleDialog(true);
-    }
-  };
-
-  const handleGoogleDialogSubmit = async (e) => {
-    e?.preventDefault();
-    const cleanEmail = (googleEmailInput || 'user@gmail.com').trim().toLowerCase();
-    const cleanName = (googleNameInput || cleanEmail.split('@')[0]).trim();
+    setError('');
     try {
+      const result = await signInWithPopup(auth, googleProvider);
+      const user = result.user;
+
+      // user.displayName, user.email, user.photoURL, user.uid
       await loginWithGoogle({
-        email: cleanEmail,
-        name: cleanName,
-        avatar: `https://api.dicebear.com/7.x/bottts/svg?seed=${cleanEmail}`,
-        googleId: `goog_${cleanEmail.replace(/[^a-zA-Z0-9]/g, '_')}`
+        email: user.email,
+        name: user.displayName || user.email.split('@')[0],
+        avatar: user.photoURL || `https://api.dicebear.com/7.x/bottts/svg?seed=${user.email}`,
+        googleId: user.uid
       });
       resetFields();
-    } catch {
-      // handled
+    } catch (err) {
+      if (err.code !== 'auth/popup-closed-by-user') {
+        setError(err.message || 'Google Sign-In failed');
+      }
     }
   };
 
@@ -309,73 +269,7 @@ export const AuthModal = () => {
             <GoogleIcon />
             <span>Continue with Google</span>
           </button>
-
-          {/* Hidden/rendered Google GSI container if client ID is active */}
-          <div ref={googleBtnRef} style={{ display: 'none' }} />
         </div>
-
-        {/* Quick Google Account Selection Dialog if no GCP Client ID configured */}
-        {showGoogleDialog && (
-          <div
-            className="neu-flat"
-            style={{
-              padding: '16px',
-              borderRadius: '16px',
-              marginBottom: '18px',
-              backgroundColor: 'var(--surface)',
-              border: '1px solid var(--accent-color)'
-            }}
-          >
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '10px' }}>
-              <GoogleIcon />
-              <div style={{ fontWeight: 600, fontSize: '0.88rem', color: 'var(--text-primary)' }}>
-                Sign in with Google Account
-              </div>
-            </div>
-            <p style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', marginBottom: '12px' }}>
-              Enter your Google email to connect your personalized account & chat history:
-            </p>
-
-            <form onSubmit={handleGoogleDialogSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-              <input
-                type="email"
-                required
-                placeholder="e.g. yourname@gmail.com"
-                className="neu-input"
-                style={{ fontSize: '0.85rem', padding: '9px 12px' }}
-                value={googleEmailInput}
-                onChange={(e) => setGoogleEmailInput(e.target.value)}
-              />
-              <input
-                type="text"
-                placeholder="Display Name (optional)"
-                className="neu-input"
-                style={{ fontSize: '0.85rem', padding: '9px 12px' }}
-                value={googleNameInput}
-                onChange={(e) => setGoogleNameInput(e.target.value)}
-              />
-
-              <div style={{ display: 'flex', gap: '8px', marginTop: '4px' }}>
-                <button
-                  type="submit"
-                  disabled={loading}
-                  className="neu-btn neu-btn-primary"
-                  style={{ flex: 1, padding: '9px', fontSize: '0.84rem' }}
-                >
-                  Confirm & Sign In
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setShowGoogleDialog(false)}
-                  className="neu-btn"
-                  style={{ padding: '9px 14px', fontSize: '0.84rem' }}
-                >
-                  Cancel
-                </button>
-              </div>
-            </form>
-          </div>
-        )}
 
         {/* Divider */}
         <div
