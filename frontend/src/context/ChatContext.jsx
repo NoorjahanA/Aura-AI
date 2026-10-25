@@ -85,7 +85,7 @@ export const ChatProvider = ({ children }) => {
     if (isStreaming) {
       stopStreaming();
     }
-    const newConv = await api.createConversation({ title: 'New Neumorphic Chat' }, token);
+    const newConv = await api.createConversation({ title: 'New Chat' }, token);
     const newId = newConv._id || newConv.id;
     setConversations((prev) => [newConv, ...prev.filter((c) => (c._id || c.id) !== newId)]);
     setActiveId(newId);
@@ -209,7 +209,7 @@ export const ChatProvider = ({ children }) => {
             if ((c._id || c.id) === currentConvId) {
               return {
                 ...c,
-                title: c.title === 'New Neumorphic Chat' || !c.title ? updatedTitle : c.title,
+                title: c.title === 'New Chat' || c.title === 'New Neumorphic Chat' || !c.title ? updatedTitle : c.title,
                 updatedAt: new Date().toISOString(),
                 messages: finalMessages
               };

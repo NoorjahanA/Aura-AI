@@ -1,16 +1,9 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Send, Square, Sparkles, CornerDownLeft } from 'lucide-react';
+import { ArrowUp, Square, Lightbulb } from 'lucide-react';
 import { useChat } from '../../context/ChatContext.jsx';
 
-const SUGGESTIONS = [
-  "How many r's are in the word 'strawberry'?",
-  "Explain quantum entanglement with step-by-step logic",
-  "Write a robust Express.js middleware for rate limiting",
-  "Solve: A farmer has 17 sheep and all but 9 die. How many are left?"
-];
-
 export const ChatInput = () => {
-  const { sendMessage, isStreaming, stopStreaming, messages } = useChat();
+  const { sendMessage, isStreaming, stopStreaming, reasoningVisible, setReasoningVisible } = useChat();
   const [input, setInput] = useState('');
   const textareaRef = useRef(null);
 
@@ -39,86 +32,61 @@ export const ChatInput = () => {
     }
   };
 
-  const handleSuggestionClick = (text) => {
-    setInput(text);
-    if (textareaRef.current) {
-      textareaRef.current.focus();
-    }
-  };
-
   return (
     <div
       style={{
-        padding: '16px 24px 22px 24px',
+        padding: '12px 24px 20px 24px',
         backgroundColor: 'var(--bg-primary)',
         position: 'relative',
         zIndex: 10
       }}
     >
-      <div style={{ maxWidth: '900px', margin: '0 auto', width: '100%' }}>
-        {/* Suggestion Chips when conversation is fresh */}
-        {messages.length <= 1 && (
-          <div
-            style={{
-              display: 'flex',
-              gap: '8px',
-              overflowX: 'auto',
-              paddingBottom: '12px',
-              scrollbarWidth: 'none'
-            }}
-          >
-            {SUGGESTIONS.map((s, idx) => (
-              <button
-                key={idx}
-                type="button"
-                onClick={() => handleSuggestionClick(s)}
-                className="neu-btn"
-                style={{
-                  padding: '7px 13px',
-                  fontSize: '0.78rem',
-                  borderRadius: '20px',
-                  whiteSpace: 'nowrap',
-                  color: 'var(--text-secondary)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '6px'
-                }}
-              >
-                <Sparkles size={12} color="var(--accent-color)" />
-                {s}
-              </button>
-            ))}
-          </div>
-        )}
-
+      <div style={{ maxWidth: '820px', margin: '0 auto', width: '100%' }}>
         {/* Input Bar Form */}
         <form
           onSubmit={handleSubmit}
-          className="neu-flat"
-          style={{
-            display: 'flex',
-            alignItems: 'flex-end',
-            padding: '8px 10px 8px 18px',
-            borderRadius: '20px',
-            backgroundColor: 'var(--surface)',
-            border: '1px solid var(--border-subtle)',
-            position: 'relative'
-          }}
+          className="human-chatbar"
         >
+          {/* Reasoning Toggle Pill */}
+          <button
+            type="button"
+            onClick={() => setReasoningVisible(!reasoningVisible)}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              padding: '7px 14px',
+              borderRadius: '9999px',
+              background: reasoningVisible ? 'rgba(249, 87, 22, 0.16)' : 'rgba(255, 255, 255, 0.05)',
+              border: reasoningVisible ? '1px solid rgba(249, 87, 22, 0.4)' : '1px solid rgba(255, 255, 255, 0.08)',
+              color: reasoningVisible ? '#f95716' : 'var(--text-secondary)',
+              fontSize: '0.82rem',
+              fontWeight: 500,
+              cursor: 'pointer',
+              transition: 'all 0.2s ease',
+              flexShrink: 0
+            }}
+            title="Toggle Reasoning"
+          >
+            <Lightbulb size={14} color={reasoningVisible ? '#f95716' : 'currentColor'} />
+            <span>Reasoning</span>
+          </button>
+
+          {/* Text Area */}
           <textarea
             ref={textareaRef}
             rows={1}
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder="Type a message or reasoning question... (Enter to send, Shift+Enter for newline)"
+            placeholder="Message Aura..."
             style={{
               flex: 1,
               border: 'none',
               background: 'transparent',
               outline: 'none',
               resize: 'none',
-              padding: '8px 0',
+              padding: '8px 8px',
               fontFamily: 'inherit',
               fontSize: '0.94rem',
               lineHeight: 1.5,
@@ -128,58 +96,67 @@ export const ChatInput = () => {
           />
 
           {/* Action Button: Send or Stop */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginLeft: '10px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', flexShrink: 0 }}>
             {isStreaming ? (
               <button
                 type="button"
                 onClick={stopStreaming}
-                className="neu-btn"
                 style={{
-                  width: '42px',
-                  height: '42px',
-                  borderRadius: '14px',
-                  padding: 0,
+                  width: '32px',
+                  height: '32px',
+                  borderRadius: '50%',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
                   color: 'var(--danger-color)',
-                  backgroundColor: 'rgba(239, 68, 68, 0.1)'
+                  backgroundColor: 'rgba(220, 38, 38, 0.15)',
+                  border: '1px solid rgba(220, 38, 38, 0.3)',
+                  cursor: 'pointer',
+                  transition: 'all 0.2s ease'
                 }}
                 title="Stop Generation"
               >
-                <Square size={16} fill="currentColor" />
+                <Square size={13} fill="currentColor" />
               </button>
             ) : (
               <button
                 type="submit"
                 disabled={!input.trim()}
-                className="neu-btn neu-btn-primary"
                 style={{
-                  width: '42px',
-                  height: '42px',
-                  borderRadius: '14px',
-                  padding: 0,
-                  opacity: input.trim() ? 1 : 0.6,
-                  cursor: input.trim() ? 'pointer' : 'default'
+                  width: '32px',
+                  height: '32px',
+                  borderRadius: '50%',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  background: input.trim() ? '#f95716' : 'rgba(255, 255, 255, 0.06)',
+                  color: input.trim() ? '#ffffff' : 'var(--text-muted)',
+                  border: 'none',
+                  cursor: input.trim() ? 'pointer' : 'default',
+                  transition: 'all 0.2s ease'
                 }}
                 title="Send Message"
               >
-                <Send size={17} />
+                <ArrowUp size={16} strokeWidth={2.2} />
               </button>
             )}
           </div>
         </form>
 
-        {/* Minimal Footer Info */}
+        {/* Disclaimer Footer Text matching picture */}
         <div
           style={{
             textAlign: 'center',
-            fontSize: '0.72rem',
+            fontSize: '0.74rem',
             color: 'var(--text-muted)',
-            marginTop: '8px'
+            marginTop: '12px',
+            userSelect: 'none'
           }}
         >
-          Minimalist Neumorphic Interface • Step-by-step reasoning enabled
+          Aura can make mistakes. Double-check important facts.
         </div>
-
       </div>
     </div>
   );
 };
+

@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { Bot, User, Copy, Check, Clock } from 'lucide-react';
+import { User, Copy, Check } from 'lucide-react';
+import { AuraLogo } from '../UI/AuraLogo.jsx';
 import { ReasoningBox } from './ReasoningBox.jsx';
 
 export const MessageBubble = ({ message, isStreaming = false }) => {
@@ -107,13 +108,15 @@ export const MessageBubble = ({ message, isStreaming = false }) => {
           alignItems: 'center',
           justifyContent: 'center',
           flexShrink: 0,
-          background: isUser ? 'var(--surface)' : 'var(--accent-gradient)',
-          boxShadow: isUser ? 'var(--neu-subtle)' : 'var(--accent-shadow)',
+          background: isUser ? 'var(--surface-raised)' : 'var(--surface)',
+          boxShadow: isUser
+            ? '0 2px 6px rgba(85, 60, 35, 0.05)'
+            : '0 4px 16px rgba(217, 98, 43, 0.25)',
           color: isUser ? 'var(--accent-color)' : '#ffffff',
           border: '1px solid var(--border-subtle)'
         }}
       >
-        {isUser ? <User size={18} /> : <Bot size={19} />}
+        {isUser ? <User size={18} /> : <AuraLogo size={24} animated={false} />}
       </div>
 
       {/* Bubble Container */}
@@ -138,7 +141,7 @@ export const MessageBubble = ({ message, isStreaming = false }) => {
             gap: '8px'
           }}
         >
-          <span>{isUser ? 'You' : 'AI Assistant'}</span>
+          <span>{isUser ? 'You' : 'Aura AI'}</span>
           <span style={{ fontSize: '0.68rem', opacity: 0.7 }}>
             {new Date(message.createdAt || Date.now()).toLocaleTimeString([], {
               hour: '2-digit',
@@ -149,22 +152,22 @@ export const MessageBubble = ({ message, isStreaming = false }) => {
 
         {/* Message Card */}
         <div
-          className={isUser ? 'neu-flat' : 'neu-raised'}
           style={{
             padding: '16px 20px',
             borderRadius: isUser ? '18px 4px 18px 18px' : '4px 18px 18px 18px',
             background: isUser ? 'var(--surface-raised)' : 'var(--surface)',
             border: isUser
-              ? '1px solid rgba(59, 130, 246, 0.25)'
+              ? '1px solid rgba(217, 98, 43, 0.22)'
               : '1px solid var(--border-subtle)',
+            boxShadow: isUser
+              ? '0 2px 10px rgba(85, 60, 35, 0.03)'
+              : '0 4px 20px -2px rgba(85, 60, 35, 0.05), 0 2px 6px -1px rgba(85, 60, 35, 0.02)',
             color: 'var(--text-primary)',
             fontSize: '0.94rem',
             position: 'relative',
             width: '100%'
           }}
         >
-          {/* Reasoning Display - Hidden (reasoning data is still collected but not shown in chat) */}
-
           {/* Message Text Content */}
           <div>{renderContent(message.content)}</div>
 
@@ -183,12 +186,19 @@ export const MessageBubble = ({ message, isStreaming = false }) => {
             >
               <button
                 onClick={handleCopy}
-                className="neu-btn"
                 style={{
-                  padding: '4px 10px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '5px',
+                  padding: '5px 11px',
                   fontSize: '0.74rem',
+                  fontWeight: 500,
                   borderRadius: '8px',
-                  boxShadow: 'var(--neu-subtle)'
+                  border: '1px solid var(--border-subtle)',
+                  background: 'var(--surface-raised)',
+                  color: 'var(--text-secondary)',
+                  cursor: 'pointer',
+                  transition: 'all 0.18s ease'
                 }}
                 title="Copy response"
               >

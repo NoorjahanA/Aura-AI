@@ -57,7 +57,7 @@ export async function streamChatCompletion({
           'Content-Type': 'application/json',
           Authorization: `Bearer ${OPENROUTER_API_KEY}`,
           'HTTP-Referer': window.location.origin,
-          'X-Title': 'Minimal Neumorphic AI Chatbot'
+          'X-Title': 'Aura AI Companion'
         },
         body: JSON.stringify({
           model: DEFAULT_MODEL,

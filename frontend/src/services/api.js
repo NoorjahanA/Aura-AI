@@ -11,8 +11,8 @@ const DEFAULT_CONVERSATION = {
     {
       _id: 'm_welcome',
       role: 'assistant',
-      content: 'Welcome to this Neumorphic AI workspace. This interface features tactile neumorphic controls, smooth dark and light themes, and deep step-by-step reasoning.\n\nTry asking me a question or logic problem to inspect the reasoning process!',
-      reasoning: 'Greet the user, outline system capabilities, and encourage testing reasoning capabilities.',
+      content: 'Hello! Welcome to Aura AI. I am your intelligent companion designed to think through complex questions step by step and converse naturally.\n\nTry asking me a logic problem, brainstorming creative ideas, or writing code to get started!',
+      reasoning: 'Greet the user warmly, introduce Aura AI, and encourage asking questions or testing reasoning capabilities.',
 
       reasoning_details: [
         {
@@ -83,7 +83,7 @@ export const api = {
       const newConv = {
         _id: `conv_${Date.now()}`,
         id: `conv_${Date.now()}`,
-        title: data?.title || 'New Neumorphic Chat',
+        title: data?.title || 'New Chat',
         model: 'nvidia/nemotron-3-ultra-550b-a55b:free',
         messages: [],
         createdAt: new Date().toISOString(),
