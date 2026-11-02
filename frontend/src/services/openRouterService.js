@@ -1,4 +1,4 @@
-const OPENROUTER_API_KEY = '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';
+const OPENROUTER_API_KEY = import.meta.env.VITE_OPENROUTER_API_KEY || '';
 const DEFAULT_MODEL = 'nvidia/nemotron-3-ultra-550b-a55b:free';
 const SERVER_URL = import.meta.env.VITE_API_URL || 'https://aura-ai-c4df.onrender.com';
 const BACKEND_STREAM_URL = `${SERVER_URL}/api/chat/stream`;
